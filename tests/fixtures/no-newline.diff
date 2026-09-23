@@ -1,0 +1,11 @@
+diff --git a/src/eof.ts b/src/eof.ts
+index 9999..bbbb 100644
+--- a/src/eof.ts
++++ b/src/eof.ts
+@@ -1,2 +1,3 @@
+ const x = 1;
+-const y = 2;
+\ No newline at end of file
++const y = 3;
++const z = 4;
+\ No newline at end of file
