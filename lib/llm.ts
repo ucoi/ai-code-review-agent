@@ -34,6 +34,11 @@ export type LlmOptions = {
   apiKey?: string;
   model?: string;
   fetch?: FetchFn;
+  /**
+   * Extra user message used by `lib/review.ts` for a one-shot JSON repair.
+   * This file still makes a single API call; retry policy lives in the orchestrator.
+   */
+  repair?: { error: string; raw: string };
 };
 
 export class LlmError extends Error {
@@ -161,10 +166,28 @@ export function buildPrompt(chunks: Chunk[]): ChatMessage[] {
   ];
 }
 
-export function buildRequestBody(chunks: Chunk[], model: string): ChatRequest {
+function buildRepairUserMessage(repair: { error: string; raw: string }): ChatMessage {
+  return {
+    role: "user",
+    content: [
+      "The previous JSON output failed validation. Fix it and return ONLY valid JSON matching the required shape. No prose, no markdown fences.",
+      `Validation error: ${repair.error}`,
+      "Previous output:",
+      repair.raw,
+    ].join("\n"),
+  };
+}
+
+export function buildRequestBody(
+  chunks: Chunk[],
+  model: string,
+  repair?: { error: string; raw: string },
+): ChatRequest {
+  const messages = buildPrompt(chunks);
+  if (repair) messages.push(buildRepairUserMessage(repair));
   return {
     model,
-    messages: buildPrompt(chunks),
+    messages,
     stream: false,
   };
 }
@@ -201,8 +224,9 @@ async function callApi(
   config: LlmConfig,
   chunks: Chunk[],
   fetchFn: FetchFn,
+  repair?: { error: string; raw: string },
 ): Promise<string> {
-  const body = buildRequestBody(chunks, config.model);
+  const body = buildRequestBody(chunks, config.model, repair);
   const response = await fetchFn(`${config.baseURL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -243,7 +267,7 @@ export async function review(
 
   const config = resolveConfig(options);
   const fetchFn = options.fetch ?? globalThis.fetch;
-  return callApi(config, chunks, fetchFn);
+  return callApi(config, chunks, fetchFn, options.repair);
 }
 
 export type { Chunk };
