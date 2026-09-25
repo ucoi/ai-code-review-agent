@@ -61,7 +61,7 @@ An automated code review agent built with Next.js 16 (App Router), TypeScript, T
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/your-username/ai-code-review-agent.git
+   git clone https://github.com/ucoi/ai-code-review-agent.git
    cd ai-code-review-agent
    ```
 
