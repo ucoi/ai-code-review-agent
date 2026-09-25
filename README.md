@@ -4,6 +4,12 @@ An automated code review agent built with Next.js 16 (App Router), TypeScript, T
 
 ---
 
+## Demo
+
+![AI Code Review Agent showing real findings on a GitHub Actions workflow PR](docs/demo.png)
+
+---
+
 ## Architecture Overview
 
 ```text
@@ -53,22 +59,27 @@ An automated code review agent built with Next.js 16 (App Router), TypeScript, T
 ### Installation & Local Setup
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/your-username/ai-code-review-agent.git
    cd ai-code-review-agent
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Configure Environment Variables**:
    Copy `.env.example` to `.env.local`:
+
    ```bash
    cp .env.example .env.local
    ```
+
    Fill in your LLM parameters in `.env.local`:
+
    ```env
    LLM_BASE_URL=http://localhost:20128/v1
    LLM_API_KEY=your-api-key-here
@@ -100,7 +111,7 @@ The agent uses standard OpenAI-compatible API schemas (`/v1/chat/completions`). 
   LLM_MODEL=your-model-name
   ```
 
-*Note: In `NODE_ENV=test`, if `LLM_API_KEY` is omitted, the agent uses an in-memory mock provider for unit testing.*
+_Note: In `NODE_ENV=test`, if `LLM_API_KEY` is omitted, the agent uses an in-memory mock provider for unit testing._
 
 ---
 
