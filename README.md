@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Code Review Agent
+
+An automated code review agent built with Next.js 16 (App Router), TypeScript, Tailwind CSS, Zod, and Vitest. It fetches pull request diffs from GitHub's REST API, parses unified diffs into structured hunks, sends them to an OpenAI-compatible LLM endpoint with prompt-injection defense, validates structured JSON responses against a strict Zod schema (with single-pass repair retries), and renders findings in a clean dashboard UI.
+
+---
+
+## Architecture Overview
+
+```text
+[ User Interface ] (app/page.tsx)
+        │
+        ▼  POST { prUrl }
+[ API Route Handler ] (app/api/review/route.ts)
+        │
+        ▼
+[ Orchestrator ] (lib/review.ts)
+   ├──> [ GitHub API Client ] (lib/github.ts) -> Fetches PR metadata & unified diff
+   ├──> [ Diff Extractor ] (lib/extract.ts)   -> Parses diffs into chunks & tracks skipped files
+   └──> [ LLM Client ] (lib/llm.ts)          -> Prompting, injection guard & single repair retry
+        │
+        ▼  Raw LLM JSON Output
+[ Zod Validation & Count Recomputation ] (lib/schema.ts)
+        │
+        ▼  Validated PullRequestReview Result
+[ API Response ] -> UI Summary, Findings, & Skipped Files
+```
+
+---
+
+## Pipeline End-to-End Flow
+
+1. **URL Parsing & Validation**: The backend receives a GitHub Pull Request URL (`https://github.com/owner/repo/pull/number`) and validates its format.
+2. **Diff & Metadata Retrieval**: Fetches PR state and unified diff via GitHub API headers (`Accept: application/vnd.github.v3.diff`).
+3. **Diff Chunk Extraction**: Unified diffs are parsed into structured reviewable chunks. Non-code/generated files (lockfiles, minified files, binary assets) are recognized and skipped.
+4. **LLM Prompting & Injection Defense**:
+   - The diff text is wrapped in delimiters (`<<<DIFF_START>>>` ... `<<<DIFF_END>>>`) with explicit instructions for the model to treat diff content as untrusted data.
+   - Structured JSON format is enforced.
+5. **Schema Validation & Self-Healing Repair**:
+   - The raw output is parsed against `ResultSchema` using Zod.
+   - If invalid JSON or schema errors occur, a second repair prompt is sent including the validation error details to fix the payload.
+   - Severity and category counts are strictly recomputed from validated findings rather than trusting LLM summary counts.
+6. **Result Presentation**: Findings (with file path, line numbers, title, explanation, suggestion, and code snippet) and skipped files list are returned to the client and rendered in the UI.
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18.x or 20.x+
+- npm
+
+### Installation & Local Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/ai-code-review-agent.git
+   cd ai-code-review-agent
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**:
+   Copy `.env.example` to `.env.local`:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Fill in your LLM parameters in `.env.local`:
+   ```env
+   LLM_BASE_URL=http://localhost:20128/v1
+   LLM_API_KEY=your-api-key-here
+   LLM_MODEL=gpt-4o-mini
+   ```
+
+4. **Run the Development Server**:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Connecting a Real LLM Provider
+
+The agent uses standard OpenAI-compatible API schemas (`/v1/chat/completions`). You can connect to any provider:
+
+- **OpenAI**:
+  ```env
+  LLM_BASE_URL=https://api.openai.com/v1
+  LLM_API_KEY=sk-...
+  LLM_MODEL=gpt-4o-mini
+  ```
+- **Local / Self-hosted / Proxy (e.g. OmniRoute, Ollama, vLLM)**:
+  ```env
+  LLM_BASE_URL=http://localhost:20128/v1
+  LLM_API_KEY=your-local-key
+  LLM_MODEL=your-model-name
+  ```
+
+*Note: In `NODE_ENV=test`, if `LLM_API_KEY` is omitted, the agent uses an in-memory mock provider for unit testing.*
+
+---
+
+## Testing
+
+Run unit and integration tests using Vitest:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm test
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Known Limitations
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Public Repositories Only**: Currently fetches diffs from public GitHub repositories without requiring a GitHub Personal Access Token.
+- **Advisory Output Only**: Reviews are generated by an LLM and serve as automated guidance, not authoritative static analysis or guaranteed security audits.
+- **No Direct GitHub Comment Posting**: Generates review reports in the dashboard UI; does not automatically write inline comments to GitHub PR threads.
+- **GitHub API Rate Limits**: Subject to standard unauthenticated GitHub API rate limits (60 requests/hour per IP).
+- **Large PR Handling**: Extremely large PR diffs are not yet split into multiple map-reduce LLM requests and may exceed context window or token limits.
+- **Provider Rate Limits**: Free-tier or proxy LLM endpoints may occasionally rate-limit or time out on large requests.
